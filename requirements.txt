@@ -4,3 +4,4 @@ Jinja2==3.1.6
 python-multipart==0.0.22
 requests==2.32.5
 uvicorn==0.40.0
+pymongo==4.17.0

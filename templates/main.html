@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Twetter</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <p class="eyebrow">Twitter Clone</p>
+        <h1>Twetter</h1>
+        <p class="subtitle">Share short posts and keep up with your timeline.</p>
+      </header>
+
+      <section id="login-box" class="card auth-card">
+        <h2>Welcome back</h2>
+        <p class="card-copy">Log in or create an account to start posting.</p>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" />
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+        />
+
+        <div class="button-row">
+          <button id="sign-up" type="button" class="button secondary">Sign Up</button>
+          <button id="login" type="button" class="button primary">Login</button>
+        </div>
+      </section>
+
+      <button id="sign-out" type="button" class="button ghost signout" hidden>Logout</button>
+
+      {% if is_authenticated %}
+        {% if error_message %}
+          <p class="error">{{ error_message }}</p>
+        {% endif %}
+
+        {% if needs_username %}
+          <section class="card">
+            <h2>Set Username</h2>
+            <p class="card-copy">This is your first login. Choose a unique username.</p>
+            <form method="post" action="/set-username">
+              <label for="username">Username</label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                maxlength="40"
+                required
+              />
+              <button type="submit" class="button primary">Save Username</button>
+            </form>
+          </section>
+        {% else %}
+          <section class="card">
+            <h2>Create Tweet</h2>
+            <p class="welcome">Signed in as <strong>@{{ username }}</strong></p>
+            <form method="post" action="/tweets">
+              <label for="content">Tweet (max 280 chars)</label>
+              <textarea
+                id="content"
+                name="content"
+                rows="4"
+                maxlength="280"
+                required
+              ></textarea>
+              <p class="helper-text">Keep it concise and clear. Max 280 characters.</p>
+              <button type="submit" class="button primary">Post Tweet</button>
+            </form>
+          </section>
+
+          <section class="card">
+            <h2>Your Tweets</h2>
+            {% if tweets %}
+              <ul class="tweets">
+                {% for tweet in tweets %}
+                  <li>
+                    <p class="tweet-content">{{ tweet.content }}</p>
+                    <small class="tweet-meta">{{ tweet.created_at }}</small>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p>No tweets yet.</p>
+            {% endif %}
+          </section>
+        {% endif %}
+      {% endif %}
+    </main>
+
+    <script type="module" src="/static/firebase-login.js"></script>
+  </body>
+</html>
