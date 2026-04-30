@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Profile</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <p class="eyebrow">User Profile</p>
+        <h1>Twetter</h1>
+        <p class="subtitle">
+          <a class="inline-link" href="/">Back to home</a>
+          {% if viewer_username %}
+            | You are @{{ viewer_username }}
+          {% endif %}
+        </p>
+      </header>
+
+      {% if error_message %}
+        <p class="error">{{ error_message }}</p>
+      {% endif %}
+
+      {% if profile_found %}
+        <section class="card">
+          <div class="profile-head">
+            {% if profile_image_url %}
+              <img
+                class="avatar avatar-lg"
+                src="{{ profile_image_url }}"
+                alt="Profile picture for {{ profile_username }}"
+              />
+            {% else %}
+              <div class="avatar avatar-lg avatar-fallback" aria-hidden="true">
+                {{ profile_username[0]|upper }}
+              </div>
+            {% endif %}
+          </div>
+          <h2>@{{ profile_username }}</h2>
+          <p class="card-copy">Email: {{ profile_email or "Not available" }}</p>
+          <p class="card-copy">Joined: {{ profile_created_at }}</p>
+          <p class="card-copy">
+            Followers: {{ follower_count }} | Following: {{ following_count }}
+          </p>
+
+          {% if is_own_profile %}
+            <form method="post" action="/profile/{{ profile_username }}/photo" enctype="multipart/form-data">
+              <label for="photo">Upload / change profile picture (JPG or PNG)</label>
+              <input id="photo" name="photo" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required />
+              <button type="submit" class="button primary">Upload Picture</button>
+            </form>
+          {% else %}
+            {% if is_following %}
+              <form method="post" action="/profile/{{ profile_username }}/unfollow">
+                <button type="submit" class="button secondary">Unfollow</button>
+              </form>
+            {% else %}
+              <form method="post" action="/profile/{{ profile_username }}/follow">
+                <button type="submit" class="button primary">Follow</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </section>
+
+        <section class="card">
+          <h2>Last 10 Tweets</h2>
+          {% if tweets %}
+            <ul class="tweets">
+              {% for tweet in tweets %}
+                <li>
+                  <p class="tweet-content">{{ tweet.content }}</p>
+                  <small class="tweet-meta">{{ tweet.created_at }}</small>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>No tweets from this user yet.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

@@ -8,10 +8,25 @@
   </head>
   <body>
     <main class="container">
-      <header class="page-header">
-        <p class="eyebrow">Twitter Clone</p>
-        <h1>Twetter</h1>
-        <p class="subtitle">Share short posts and keep up with your timeline.</p>
+      <header class="page-header card">
+        <div>
+          <p class="eyebrow">Twitter Clone</p>
+          <h1>Twetter</h1>
+          <p class="subtitle">Share short posts and keep up with your timeline.</p>
+        </div>
+        {% if is_authenticated and username %}
+          <div class="hero-user">
+            {% if profile_image_url %}
+              <img class="avatar avatar-sm" src="{{ profile_image_url }}" alt="Profile picture for {{ username }}" />
+            {% else %}
+              <div class="avatar avatar-sm avatar-fallback" aria-hidden="true">
+                {{ username[0]|upper }}
+              </div>
+            {% endif %}
+            <p class="hero-user-label">Signed in as</p>
+            <a class="inline-link hero-user-name" href="/profile/{{ username }}">@{{ username }}</a>
+          </div>
+        {% endif %}
       </header>
 
       <section id="login-box" class="card auth-card">
@@ -58,77 +73,92 @@
             </form>
           </section>
         {% else %}
-          <section class="card">
-            <h2>Search</h2>
-            <p class="card-copy">
-              Search usernames and tweets by prefix (beginning of text only).
-            </p>
-            <form method="get" action="/search">
-              <label for="q">Search text</label>
-              <input
-                id="q"
-                name="q"
-                type="text"
-                value="{{ search_query }}"
-                maxlength="280"
-                required
-              />
-              <button type="submit" class="button secondary">Search</button>
-            </form>
-            {% if search_query %}
-              <div class="search-results">
-                <div>
-                  <h3>Usernames</h3>
-                  {% if user_results %}
-                    <ul class="search-list">
-                      {% for result in user_results %}
-                        <li>@{{ result.username }}</li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <p>No usernames matched "{{ search_query }}".</p>
-                  {% endif %}
+          <div class="dashboard-grid">
+            <section class="card">
+              <h2>Search</h2>
+              <p class="card-copy">
+                Find profiles and tweets by matching only from the beginning.
+              </p>
+              <form method="get" action="/search">
+                <label for="q">Search text</label>
+                <input
+                  id="q"
+                  name="q"
+                  type="text"
+                  value="{{ search_query }}"
+                  maxlength="280"
+                  required
+                />
+                <button type="submit" class="button secondary">Search</button>
+              </form>
+              {% if search_query %}
+                <div class="search-results">
+                  <div class="search-column">
+                    <h3>Usernames</h3>
+                    {% if user_results %}
+                      <ul class="search-list">
+                        {% for result in user_results %}
+                          <li>
+                            <a class="inline-link" href="/profile/{{ result.username }}"
+                              >@{{ result.username }}</a
+                            >
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <p class="empty-state">No usernames matched "{{ search_query }}".</p>
+                    {% endif %}
+                  </div>
+                  <div class="search-column">
+                    <h3>Tweets</h3>
+                    {% if tweet_results %}
+                      <ul class="search-list">
+                        {% for result in tweet_results %}
+                          <li>
+                            <p class="tweet-content">{{ result.content }}</p>
+                            <small class="tweet-meta">
+                              <a class="inline-link" href="/profile/{{ result.username }}"
+                                >@{{ result.username }}</a
+                              >
+                              - {{ result.created_at }}
+                            </small>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <p class="empty-state">No tweets matched "{{ search_query }}".</p>
+                    {% endif %}
+                  </div>
                 </div>
-                <div>
-                  <h3>Tweets</h3>
-                  {% if tweet_results %}
-                    <ul class="search-list">
-                      {% for result in tweet_results %}
-                        <li>
-                          <p class="tweet-content">{{ result.content }}</p>
-                          <small class="tweet-meta"
-                            >@{{ result.username }} - {{ result.created_at }}</small
-                          >
-                        </li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <p>No tweets matched "{{ search_query }}".</p>
-                  {% endif %}
-                </div>
-              </div>
-            {% endif %}
-          </section>
+              {% endif %}
+            </section>
+
+            <section class="card">
+              <h2>Create Tweet</h2>
+              <p class="welcome">
+                Posting as
+                <strong><a class="inline-link" href="/profile/{{ username }}">@{{ username }}</a></strong>
+              </p>
+              <form method="post" action="/tweets">
+                <label for="content">Tweet (max 280 chars)</label>
+                <textarea
+                  id="content"
+                  name="content"
+                  rows="4"
+                  maxlength="280"
+                  required
+                ></textarea>
+                <p class="helper-text">Keep it concise and clear. Max 280 characters.</p>
+                <button type="submit" class="button primary">Post Tweet</button>
+              </form>
+            </section>
+          </div>
 
           <section class="card">
-            <h2>Create Tweet</h2>
-            <p class="welcome">Signed in as <strong>@{{ username }}</strong></p>
-            <form method="post" action="/tweets">
-              <label for="content">Tweet (max 280 chars)</label>
-              <textarea
-                id="content"
-                name="content"
-                rows="4"
-                maxlength="280"
-                required
-              ></textarea>
-              <p class="helper-text">Keep it concise and clear. Max 280 characters.</p>
-              <button type="submit" class="button primary">Post Tweet</button>
-            </form>
-          </section>
-
-          <section class="card">
-            <h2>Your Tweets</h2>
+            <div class="section-header">
+              <h2>Your Tweets</h2>
+              <span class="pill">{{ tweets|length }} total</span>
+            </div>
             {% if tweets %}
               <ul class="tweets">
                 {% for tweet in tweets %}
@@ -139,7 +169,7 @@
                 {% endfor %}
               </ul>
             {% else %}
-              <p>No tweets yet.</p>
+              <p class="empty-state">No tweets yet. Create your first tweet above.</p>
             {% endif %}
           </section>
         {% endif %}

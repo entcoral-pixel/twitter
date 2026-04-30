@@ -42,7 +42,11 @@ body {
 }
 
 .page-header {
-  margin-bottom: 1.3rem;
+  margin-bottom: 1.1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .eyebrow {
@@ -66,6 +70,65 @@ h1 {
   font-size: 0.97rem;
 }
 
+.hero-user {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #d8e4f8;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  min-width: 170px;
+}
+
+.hero-user-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.hero-user-name {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.96rem;
+}
+
+.profile-head {
+  margin-bottom: 0.45rem;
+}
+
+.avatar {
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid #d6e3fa;
+  background: #fff;
+}
+
+.avatar-sm {
+  width: 42px;
+  height: 42px;
+}
+
+.avatar-lg {
+  width: 84px;
+  height: 84px;
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #2e4b72;
+  background: #e7efff;
+}
+
+.inline-link {
+  color: #2559bf;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--card-border);
@@ -80,6 +143,12 @@ h1 {
 
 .auth-card {
   margin-top: 0.3rem;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 0.95rem;
 }
 
 .card h2 {
@@ -215,6 +284,13 @@ textarea {
   margin-top: 1rem;
 }
 
+.search-column {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #e2e9f5;
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+}
+
 .search-results h3 {
   margin: 0 0 0.45rem;
   font-size: 0.92rem;
@@ -243,6 +319,23 @@ textarea {
   padding: 0;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pill {
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #30527d;
+  background: #e8f0ff;
+  border: 1px solid #d5e4ff;
+}
+
 .tweets li {
   border-top: 1px solid #e6ecf7;
   padding: 0.95rem 0;
@@ -264,9 +357,24 @@ textarea {
   font-size: 0.8rem;
 }
 
+.empty-state {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 @media (max-width: 620px) {
   .container {
     padding-top: 1.5rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+  }
+
+  .hero-user {
+    min-width: 0;
+    width: 100%;
   }
 
   .button-row {
@@ -278,6 +386,10 @@ textarea {
   }
 
   .search-results {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid {
     grid-template-columns: 1fr;
   }
 }
