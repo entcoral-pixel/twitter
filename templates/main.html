@@ -59,6 +59,58 @@
           </section>
         {% else %}
           <section class="card">
+            <h2>Search</h2>
+            <p class="card-copy">
+              Search usernames and tweets by prefix (beginning of text only).
+            </p>
+            <form method="get" action="/search">
+              <label for="q">Search text</label>
+              <input
+                id="q"
+                name="q"
+                type="text"
+                value="{{ search_query }}"
+                maxlength="280"
+                required
+              />
+              <button type="submit" class="button secondary">Search</button>
+            </form>
+            {% if search_query %}
+              <div class="search-results">
+                <div>
+                  <h3>Usernames</h3>
+                  {% if user_results %}
+                    <ul class="search-list">
+                      {% for result in user_results %}
+                        <li>@{{ result.username }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p>No usernames matched "{{ search_query }}".</p>
+                  {% endif %}
+                </div>
+                <div>
+                  <h3>Tweets</h3>
+                  {% if tweet_results %}
+                    <ul class="search-list">
+                      {% for result in tweet_results %}
+                        <li>
+                          <p class="tweet-content">{{ result.content }}</p>
+                          <small class="tweet-meta"
+                            >@{{ result.username }} - {{ result.created_at }}</small
+                          >
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p>No tweets matched "{{ search_query }}".</p>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+          </section>
+
+          <section class="card">
             <h2>Create Tweet</h2>
             <p class="welcome">Signed in as <strong>@{{ username }}</strong></p>
             <form method="post" action="/tweets">

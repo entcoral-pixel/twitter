@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from os import getenv
 from pathlib import Path
+import re
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import RedirectResponse
@@ -76,6 +77,40 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _format_tweets_for_view(tweet_documents: list[dict]) -> list[dict]:
+    for tweet in tweet_documents:
+        tweet["_id"] = str(tweet["_id"])
+        tweet["created_at"] = tweet["created_at"].strftime("%Y-%m-%d %H:%M:%S UTC")
+    return tweet_documents
+
+
+def _build_authenticated_context(
+    request: Request,
+    user_document: dict,
+    error_message: str = "",
+    search_query: str = "",
+    user_results: list[dict] | None = None,
+    tweet_results: list[dict] | None = None,
+) -> dict:
+    user_id = user_document.get("_id")
+    tweet_documents: list[dict] = []
+    if user_id is not None:
+        tweet_documents = list(
+            tweets_collection.find({"user_id": user_id}).sort("created_at", -1)
+        )
+    return {
+        "request": request,
+        "is_authenticated": True,
+        "needs_username": not bool(user_document.get("username")),
+        "username": user_document.get("username", ""),
+        "tweets": _format_tweets_for_view(tweet_documents),
+        "error_message": error_message,
+        "search_query": search_query,
+        "user_results": user_results or [],
+        "tweet_results": tweet_results or [],
+    }
+
+
 _load_env_file()
 mongo_uri = getenv("MONGO_URI", "").strip()
 if not mongo_uri:
@@ -120,6 +155,9 @@ async def root(request: Request):
         "username": "",
         "tweets": [],
         "error_message": "",
+        "search_query": "",
+        "user_results": [],
+        "tweet_results": [],
     }
 
     if firebase_user is None:
@@ -129,23 +167,7 @@ async def root(request: Request):
         return response
 
     local_user = _get_or_create_user(firebase_user["uid"], firebase_user["email"])
-    needs_username = not bool(local_user.get("username"))
-
-    tweet_documents = list(
-        tweets_collection.find({"user_id": local_user["_id"]}).sort("created_at", -1)
-    )
-    for tweet in tweet_documents:
-        tweet["_id"] = str(tweet["_id"])
-        tweet["created_at"] = tweet["created_at"].strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    context.update(
-        {
-            "is_authenticated": True,
-            "needs_username": needs_username,
-            "username": local_user.get("username", ""),
-            "tweets": tweet_documents,
-        }
-    )
+    context.update(_build_authenticated_context(request, local_user))
     return templates.TemplateResponse("main.html", context)
 
 
@@ -159,14 +181,11 @@ async def set_username(request: Request, username: str = Form(...)):
     if not cleaned_username:
         return templates.TemplateResponse(
             "main.html",
-            {
-                "request": request,
-                "is_authenticated": True,
-                "needs_username": True,
-                "username": "",
-                "tweets": [],
-                "error_message": "Username cannot be empty.",
-            },
+            _build_authenticated_context(
+                request=request,
+                user_document={"username": ""},
+                error_message="Username cannot be empty.",
+            ),
             status_code=400,
         )
 
@@ -178,14 +197,11 @@ async def set_username(request: Request, username: str = Form(...)):
     if duplicate_user is not None:
         return templates.TemplateResponse(
             "main.html",
-            {
-                "request": request,
-                "is_authenticated": True,
-                "needs_username": True,
-                "username": "",
-                "tweets": [],
-                "error_message": "That username is taken. Please choose another one.",
-            },
+            _build_authenticated_context(
+                request=request,
+                user_document={"username": ""},
+                error_message="That username is taken. Please choose another one.",
+            ),
             status_code=409,
         )
 
@@ -208,23 +224,13 @@ async def create_tweet(request: Request, content: str = Form(...)):
 
     cleaned_content = content.strip()
     if not cleaned_content or len(cleaned_content) > 280:
-        tweet_documents = list(
-            tweets_collection.find({"user_id": user_document["_id"]}).sort("created_at", -1)
-        )
-        for tweet in tweet_documents:
-            tweet["_id"] = str(tweet["_id"])
-            tweet["created_at"] = tweet["created_at"].strftime("%Y-%m-%d %H:%M:%S UTC")
-
         return templates.TemplateResponse(
             "main.html",
-            {
-                "request": request,
-                "is_authenticated": True,
-                "needs_username": False,
-                "username": user_document["username"],
-                "tweets": tweet_documents,
-                "error_message": "Tweet must be between 1 and 280 characters.",
-            },
+            _build_authenticated_context(
+                request=request,
+                user_document=user_document,
+                error_message="Tweet must be between 1 and 280 characters.",
+            ),
             status_code=400,
         )
 
@@ -235,3 +241,66 @@ async def create_tweet(request: Request, content: str = Form(...)):
     }
     tweets_collection.insert_one(tweet_document)
     return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/search")
+async def search(request: Request, q: str = ""):
+    firebase_user = _verify_firebase_user(request)
+    if firebase_user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    user_document = _get_or_create_user(firebase_user["uid"], firebase_user["email"])
+    if not user_document.get("username"):
+        return RedirectResponse(url="/", status_code=303)
+
+    cleaned_query = q.strip()
+    if not cleaned_query:
+        return RedirectResponse(url="/", status_code=303)
+
+    prefix_regex = re.compile(f"^{re.escape(cleaned_query)}", re.IGNORECASE)
+
+    matched_users = list(
+        users_collection.find(
+            {
+                "$and": [
+                    {"username": {"$regex": prefix_regex}},
+                    {"username": {"$ne": ""}},
+                ]
+            },
+            {"username": 1},
+        )
+        .sort("username", 1)
+        .limit(25)
+    )
+    user_results = [{"username": user_row.get("username", "")} for user_row in matched_users]
+
+    matched_tweets = list(
+        tweets_collection.find({"content": {"$regex": prefix_regex}})
+        .sort("created_at", -1)
+        .limit(25)
+    )
+    user_ids = [tweet["user_id"] for tweet in matched_tweets]
+    authors = {
+        user_row["_id"]: user_row.get("username", "")
+        for user_row in users_collection.find({"_id": {"$in": user_ids}}, {"username": 1})
+    }
+    tweet_results = []
+    for tweet in matched_tweets:
+        tweet_results.append(
+            {
+                "content": tweet.get("content", ""),
+                "created_at": tweet["created_at"].strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "username": authors.get(tweet["user_id"], "unknown"),
+            }
+        )
+
+    return templates.TemplateResponse(
+        "main.html",
+        _build_authenticated_context(
+            request=request,
+            user_document=user_document,
+            search_query=cleaned_query,
+            user_results=user_results,
+            tweet_results=tweet_results,
+        ),
+    )
