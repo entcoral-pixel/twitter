@@ -24,7 +24,6 @@ window.addEventListener("load", function () {
   initializeApp(firebaseConfig);
   const auth = getAuth();
   updateUI(document.cookie);
-  console.log("hello world load");
 
   // signup of a new user to firebase
   document.getElementById("sign-up").addEventListener("click", function () {

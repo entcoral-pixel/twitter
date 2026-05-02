@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
+from bson import ObjectId
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import Response
 from fastapi.responses import RedirectResponse
@@ -87,6 +88,52 @@ def _format_tweets_for_view(tweet_documents: list[dict]) -> list[dict]:
     return tweet_documents
 
 
+def _serialize_tweet(
+    tweet_document: dict,
+    current_user_id: ObjectId | None = None,
+    author_username: str = "",
+) -> dict:
+    return {
+        "id": str(tweet_document["_id"]),
+        "content": tweet_document.get("content", ""),
+        "created_at": tweet_document["created_at"].strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "is_owner": current_user_id is not None and tweet_document.get("user_id") == current_user_id,
+        "author_username": author_username,
+    }
+
+
+def _build_timeline_for_user(user_document: dict) -> list[dict]:
+    following_user_ids = [
+        follow_document["following_user_id"]
+        for follow_document in follows_collection.find(
+            {"follower_user_id": user_document["_id"]},
+            {"following_user_id": 1},
+        )
+    ]
+    timeline_user_ids = [user_document["_id"], *following_user_ids]
+
+    timeline_tweets = list(
+        tweets_collection.find({"user_id": {"$in": timeline_user_ids}})
+        .sort("created_at", -1)
+        .limit(20)
+    )
+    author_map = {
+        author_document["_id"]: author_document.get("username", "")
+        for author_document in users_collection.find(
+            {"_id": {"$in": timeline_user_ids}},
+            {"username": 1},
+        )
+    }
+    return [
+        _serialize_tweet(
+            tweet_document=tweet_document,
+            current_user_id=user_document["_id"],
+            author_username=author_map.get(tweet_document["user_id"], "unknown"),
+        )
+        for tweet_document in timeline_tweets
+    ]
+
+
 def _build_authenticated_context(
     request: Request,
     user_document: dict,
@@ -101,13 +148,23 @@ def _build_authenticated_context(
         tweet_documents = list(
             tweets_collection.find({"user_id": user_id}).sort("created_at", -1)
         )
+    tweet_items = [
+        _serialize_tweet(
+            tweet_document=tweet_document,
+            current_user_id=user_id,
+            author_username=user_document.get("username", ""),
+        )
+        for tweet_document in tweet_documents
+    ]
     return {
         "request": request,
         "is_authenticated": True,
         "needs_username": not bool(user_document.get("username")),
         "username": user_document.get("username", ""),
+        "bio": user_document.get("bio", ""),
         "profile_image_url": _resolve_profile_image_url(user_document),
-        "tweets": _format_tweets_for_view(tweet_documents),
+        "tweets": tweet_items,
+        "timeline_tweets": _build_timeline_for_user(user_document) if user_id is not None else [],
         "error_message": error_message,
         "search_query": search_query,
         "user_results": user_results or [],
@@ -178,6 +235,7 @@ def _get_or_create_user(firebase_uid: str, email: str) -> dict:
         "firebase_uid": firebase_uid,
         "email": email,
         "username": "",
+        "bio": "",
         "created_at": _utc_now(),
     }
     inserted = users_collection.insert_one(new_user)
@@ -229,13 +287,21 @@ def _build_profile_context(
         "error_message": error_message,
         "profile_username": profile_user["username"],
         "profile_email": profile_user.get("email", ""),
+        "profile_bio": profile_user.get("bio", ""),
         "profile_image_url": _resolve_profile_image_url(profile_user),
         "profile_created_at": profile_user["created_at"].strftime("%Y-%m-%d %H:%M:%S UTC"),
         "is_own_profile": is_own_profile,
         "is_following": is_following,
         "follower_count": follower_count,
         "following_count": following_count,
-        "tweets": _format_tweets_for_view(last_ten_tweets),
+        "tweets": [
+            _serialize_tweet(
+                tweet_document=tweet_document,
+                current_user_id=viewer_document["_id"],
+                author_username=profile_user.get("username", ""),
+            )
+            for tweet_document in last_ten_tweets
+        ],
     }
 
 
@@ -335,6 +401,40 @@ async def create_tweet(request: Request, content: str = Form(...)):
         "created_at": _utc_now(),
     }
     tweets_collection.insert_one(tweet_document)
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/tweets/{tweet_id}/edit")
+async def edit_tweet(request: Request, tweet_id: str, content: str = Form(...)):
+    user_document, redirect_response = _get_authenticated_user_or_redirect(request)
+    if redirect_response is not None:
+        return redirect_response
+
+    try:
+        tweet_object_id = ObjectId(tweet_id)
+    except Exception:
+        return RedirectResponse(url="/", status_code=303)
+
+    tweet_document = tweets_collection.find_one({"_id": tweet_object_id})
+    if tweet_document is None or tweet_document["user_id"] != user_document["_id"]:
+        return RedirectResponse(url="/", status_code=303)
+
+    cleaned_content = content.strip()
+    if not cleaned_content or len(cleaned_content) > 280:
+        return templates.TemplateResponse(
+            "main.html",
+            _build_authenticated_context(
+                request=request,
+                user_document=user_document,
+                error_message="Edited tweet must be between 1 and 280 characters.",
+            ),
+            status_code=400,
+        )
+
+    tweets_collection.update_one(
+        {"_id": tweet_object_id},
+        {"$set": {"content": cleaned_content}},
+    )
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -547,6 +647,38 @@ async def upload_profile_photo(request: Request, username: str, photo: UploadFil
                 "profile_image_blob_name": blob_name,
             }
         },
+    )
+    return RedirectResponse(url=f"/profile/{profile_user['username']}", status_code=303)
+
+
+@app.post("/profile/{username}/bio")
+async def update_bio(request: Request, username: str, bio: str = Form(...)):
+    viewer_document, redirect_response = _get_authenticated_user_or_redirect(request)
+    if redirect_response is not None:
+        return redirect_response
+
+    profile_user = users_collection.find_one({"username": username.strip()})
+    if profile_user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if viewer_document["_id"] != profile_user["_id"]:
+        return RedirectResponse(url=f"/profile/{profile_user['username']}", status_code=303)
+
+    cleaned_bio = bio.strip()
+    if len(cleaned_bio) > 280:
+        return templates.TemplateResponse(
+            "profile.html",
+            _build_profile_context(
+                request=request,
+                viewer_document=viewer_document,
+                profile_user=profile_user,
+                error_message="Bio must be 280 characters or fewer.",
+            ),
+            status_code=400,
+        )
+
+    users_collection.update_one(
+        {"_id": profile_user["_id"]},
+        {"$set": {"bio": cleaned_bio}},
     )
     return RedirectResponse(url=f"/profile/{profile_user['username']}", status_code=303)
 

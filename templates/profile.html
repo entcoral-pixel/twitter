@@ -40,12 +40,25 @@
           </div>
           <h2>@{{ profile_username }}</h2>
           <p class="card-copy">Email: {{ profile_email or "Not available" }}</p>
+          <p class="card-copy">
+            Bio:
+            {% if profile_bio %}
+              {{ profile_bio }}
+            {% else %}
+              No bio added yet.
+            {% endif %}
+          </p>
           <p class="card-copy">Joined: {{ profile_created_at }}</p>
           <p class="card-copy">
             Followers: {{ follower_count }} | Following: {{ following_count }}
           </p>
 
           {% if is_own_profile %}
+            <form method="post" action="/profile/{{ profile_username }}/bio">
+              <label for="bio">Short bio (max 280 chars)</label>
+              <textarea id="bio" name="bio" rows="4" maxlength="280">{{ profile_bio }}</textarea>
+              <button type="submit" class="button secondary">Save Bio</button>
+            </form>
             <form method="post" action="/profile/{{ profile_username }}/photo" enctype="multipart/form-data">
               <label for="photo">Upload / change profile picture (JPG or PNG)</label>
               <input id="photo" name="photo" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required />
@@ -72,6 +85,22 @@
                 <li>
                   <p class="tweet-content">{{ tweet.content }}</p>
                   <small class="tweet-meta">{{ tweet.created_at }}</small>
+                  {% if is_own_profile and tweet.is_owner %}
+                    <details class="tweet-edit-box">
+                      <summary>Edit tweet</summary>
+                      <form method="post" action="/tweets/{{ tweet.id }}/edit">
+                        <label for="profile-edit-{{ tweet.id }}">Update tweet</label>
+                        <textarea
+                          id="profile-edit-{{ tweet.id }}"
+                          name="content"
+                          rows="3"
+                          maxlength="280"
+                          required
+                        >{{ tweet.content }}</textarea>
+                        <button type="submit" class="button secondary">Save Changes</button>
+                      </form>
+                    </details>
+                  {% endif %}
                 </li>
               {% endfor %}
             </ul>
